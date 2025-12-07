@@ -1,9 +1,10 @@
 // frontend/src/api.js
 
-const DEFAULT_BASE_URL = "http://localhost:5000/api";
+// const DEFAULT_BASE_URL = "http://localhost:5000/api";
 
-export const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL || DEFAULT_BASE_URL;
+// export const API_BASE_URL =
+//   process.env.REACT_APP_API_BASE_URL || DEFAULT_BASE_URL;
+export const API_BASE_URL = "https://cse-quiz-event.onrender.com/api";
 
 export async function startQuiz(data) {
   const res = await fetch(`${API_BASE_URL}/quiz/start`, {
