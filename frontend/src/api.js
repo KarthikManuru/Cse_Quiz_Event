@@ -31,10 +31,55 @@ export async function submitQuiz(data) {
   return res.json();
 }
 
-export async function flagCheat(attemptId) {
+export async function flagCheat(attemptId, questionTimeLeft, totalTimeLeft, currentQuestionIndex) {
   await fetch(`${API_BASE_URL}/quiz/flag-cheat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ attemptId })
+    body: JSON.stringify({ 
+      attemptId, 
+      questionTimeLeft, 
+      totalTimeLeft, 
+      currentQuestionIndex 
+    })
+  });
+}
+
+export async function unlockQuiz(attemptId, adminCode) {
+  const res = await fetch(`${API_BASE_URL}/quiz/unlock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ attemptId, adminCode })
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to unlock quiz");
+  }
+  return json;
+}
+
+export async function resumeQuiz(attemptId) {
+  const res = await fetch(`${API_BASE_URL}/quiz/resume/${attemptId}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" }
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(json.message || "Failed to resume quiz");
+  }
+  return json;
+}
+
+export async function trackQuestion(attemptId, questionIndex) {
+  await fetch(`${API_BASE_URL}/quiz/track-question`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ attemptId, questionIndex })
+  }).catch((err) => {
+    console.error("Failed to track question:", err);
+    // Non-critical, don't throw
   });
 }
