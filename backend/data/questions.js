@@ -11,7 +11,7 @@ const baseQuestions = [
   {
     id: 1,
     question:
-      "Q " +
+      "Q:" +
       "<article>\n" +
       "  <header>Welcome</header>\n" +
       "  <section>Content here</section>\n" +
@@ -29,7 +29,7 @@ const baseQuestions = [
   {
     id: 2,
     question:
-      "Q" +
+      "Q:" +
       "Which selector has the HIGHEST specificity?",
     options: [
       "div.container p",
@@ -42,7 +42,7 @@ const baseQuestions = [
   {
     id: 3,
     question:
-      "Q" +
+      "Q:" +
       "let x = 1;\n" +
       "{\n" +
       "  let x = 2;\n" +
@@ -56,7 +56,7 @@ const baseQuestions = [
   {
     id: 4,
     question:
-      "Q" +
+      "Q:" +
       "If justify-content: space-between is applied to a flex container with 3 items, where does the extra space go?",
     options: [
       "Before first item",
@@ -69,7 +69,7 @@ const baseQuestions = [
   {
     id: 5,
     question:
-      "Q" +
+      "Q:" +
       "<div id=\"parent\">\n" +
       "  <button id=\"child\">Click</button>\n" +
       "</div>\n\n" +
@@ -85,7 +85,7 @@ const baseQuestions = [
   {
     id: 6,
     question:
-      "Q" +
+      "Q:" +
       ".grid {\n" +
       "  display: grid;\n" +
       "  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));\n" +
@@ -102,7 +102,7 @@ const baseQuestions = [
   {
     id: 7,
     question:
-      "Q" +
+      "Q:" +
       "Promise.resolve(5)\n" +
       "  .then(x => x * 2)\n" +
       "  .then(x => x + 3)\n" +
@@ -114,7 +114,7 @@ const baseQuestions = [
   {
     id: 8,
     question:
-      "Q" +
+      "Q:" +
       "An element with position: sticky behaves like which position until its scroll threshold?",
     options: ["absolute", "fixed", "relative", "static"],
     correctIndex: 2
@@ -122,7 +122,7 @@ const baseQuestions = [
   {
     id: 9,
     question:
-      "Q" +
+      "Q:" +
       "[1, 2, 3].reduce((acc, val) => acc + val, 10);\n\n" +
       "What's the result?",
     options: ["6", "16", "60", "Error"],
@@ -131,7 +131,7 @@ const baseQuestions = [
   {
     id: 10,
     question:
-      "Q" +
+      "Q:" +
       "When you apply transform: rotate(45deg), what's the default transform-origin?",
     options: ["top left", "center center", "bottom right", "0 0"],
     correctIndex: 1
@@ -139,7 +139,7 @@ const baseQuestions = [
   {
     id: 11,
     question:
-      "Q" +
+      "Q:" +
       "async function test() {\n" +
       "  console.log('A');\n" +
       "  await Promise.resolve();\n" +
@@ -154,7 +154,7 @@ const baseQuestions = [
   {
     id: 12,
     question:
-      "Q" +
+      "Q:" +
       ":root { --color: red; }\n" +
       ".child { color: var(--color, blue); }\n" +
       ".parent { --color: green; }\n\n" +
@@ -165,7 +165,7 @@ const baseQuestions = [
   {
     id: 13,
     question:
-      "Q" +
+      "Q:" +
       "for (var i = 0; i < 3; i++) {\n" +
       "  setTimeout(() => console.log(i), 100);\n" +
       "}\n\n" +
@@ -176,7 +176,7 @@ const baseQuestions = [
   {
     id: 14,
     question:
-      "Q" +
+      "Q:" +
       "What's the default threshold value for IntersectionObserver?",
     options: ["0", "0.5", "1", "[0, 1]"],
     correctIndex: 0
@@ -184,7 +184,7 @@ const baseQuestions = [
   {
     id: 15,
     question:
-      "Q" +
+      "Q:" +
       "What does contain: layout prevent?",
     options: [
       "External CSS from affecting element",
@@ -197,7 +197,7 @@ const baseQuestions = [
   {
     id: 16,
     question:
-      "Q" +
+      "Q:" +
       "What's the typical localStorage limit per origin in most browsers?",
     options: ["1MB", "5MB", "10MB", "Unlimited"],
     correctIndex: 1
@@ -205,7 +205,7 @@ const baseQuestions = [
   {
     id: 17,
     question:
-      "Q" +
+      "Q:" +
       "In <svg viewBox=\"0 0 100 100\">, what do the four numbers represent?",
     options: [
       "x, y, width, height",
@@ -218,7 +218,7 @@ const baseQuestions = [
   {
     id: 18,
     question:
-      "Q" +
+      "Q:" +
       "const obj = Object.create(null);\n" +
       "obj.toString();\n\n" +
       "What happens?",
@@ -233,7 +233,7 @@ const baseQuestions = [
   {
     id: 19,
     question:
-      "Q" +
+      "Q:" +
       "Why is backdrop-filter considered expensive?",
     options: [
       "Large file size",
@@ -246,7 +246,7 @@ const baseQuestions = [
   {
     id: 20,
     question:
-      "Q" +
+      "Q:" +
       "If a service worker is registered at /app/sw.js, what's its default scope?",
     options: ["/", "/app/", "/app/sw.js", "Everything"],
     correctIndex: 1

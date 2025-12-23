@@ -257,7 +257,7 @@ const Quiz = ({
     if (!text) return "";
 
     // Remove Q1/Q2/... but keep the leading Q
-    text = text.replace(/^Q\d+\s*[.:]?\s*/, "Q ");
+    text = text.replace(/^\s*Q\d*\s*[.:]?\s*/i, "");
 
     // Check if question contains code-like patterns (HTML tags, CSS, JS code)
     const hasCode = /<[^>]+>|function\s*\(|const\s+\w+\s*=|var\s+\w+\s*=|let\s+\w+\s*=|\\.\w+\\s*\\{|@media|#\\w+|\\.\\w+\\s*\\{/.test(text);
