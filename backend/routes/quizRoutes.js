@@ -1,71 +1,52 @@
 const express = require("express");
 const Attempt = require("../models/Attempt");
-
-// ⚠️ IMPORTANT: Node.js caches require() modules until server restart
-// If you update questions.js, you MUST restart the backend server
-// for changes to take effect. See QUESTION_UPDATE_GUIDE.md for details.
-const questionSets = require("../data/questions");
+const questionSets = require("../data/questions"); // your question sets JSON
 
 const router = express.Router();
 
+// ---- Helpers ----
 function getRandomSetKey() {
-  const keys = Object.keys(questionSets); // ['A', 'B', 'C', 'D']
-  const index = Math.floor(Math.random() * keys.length);
-  return keys[index];
+  const keys = Object.keys(questionSets);
+  return keys[Math.floor(Math.random() * keys.length)];
 }
 
-// Email validation helper
 function isValidEmail(email) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
 
-// Start quiz: store student details + assign random set
+// ---- START QUIZ (GROUP BASED) ----
 router.post("/start", async (req, res) => {
   try {
-    const { name, studentId, email } = req.body;
+    const { students } = req.body;
 
-    // Validation: All fields required
-    if (!name || !studentId || !email) {
-      return res.status(400).json({ message: "All fields are required." });
+    if (!Array.isArray(students) || students.length !== 3) {
+      return res.status(400).json({ message: "Exactly 3 students are required." });
     }
 
-    // Validation: Email format
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ message: "Please enter a valid email address." });
+    for (const s of students) {
+      if (!s.name || !s.studentId || !s.email || !s.phoneNumber) {
+        return res.status(400).json({
+          message: "Each student must have name, studentId, email, phoneNumber."
+        });
+      }
+      if (!isValidEmail(s.email)) {
+        return res.status(400).json({ message: `Invalid email for studentId ${s.studentId}` });
+      }
     }
 
-    // Validation: Trim and check empty strings
-    const trimmedName = name.trim();
-    const trimmedStudentId = studentId.trim();
-    const trimmedEmail = email.trim();
-
-    if (!trimmedName || !trimmedStudentId || !trimmedEmail) {
-      return res.status(400).json({ message: "All fields must not be empty." });
-    }
-
-    // 🔒 One attempt per Techzite ID (studentId)
-    // ⚠️ NOTE: If updating questions, use a NEW studentId that has never been used.
-    // Reusing an existing studentId will be rejected here.
-    const existing = await Attempt.findOne({ studentId: trimmedStudentId });
-    if (existing) {
-      return res.status(400).json({
-        message: "This Techzite ID has already attempted the quiz."
-      });
-    }
+    const studentIds = students.map(s => s.studentId);
+    const existingAttempt = await Attempt.findOne({ "students.studentId": { $in: studentIds } });
+    if (existingAttempt) return res.status(400).json({ message: "One or more students already attempted quiz." });
 
     const setKey = getRandomSetKey();
-
-    // ⏱️ Set timing fields (server-defined to prevent manipulation)
-    const perQuestionTimeLimit = 45; // 45 seconds per question
-    const totalQuizDuration = 900; // 15 minutes = 900 seconds
+    const perQuestionTimeLimit = 45;
+    const totalQuizDuration = 900;
     const quizStartTime = new Date();
     const quizEndTime = new Date(quizStartTime.getTime() + totalQuizDuration * 1000);
 
     const attempt = await Attempt.create({
-      name: trimmedName,
-      studentId: trimmedStudentId,
-      email: trimmedEmail,
+      students,
       questionSet: setKey,
       status: "in-progress",
       cheated: false,
@@ -73,13 +54,10 @@ router.post("/start", async (req, res) => {
       quizEndTime,
       perQuestionTimeLimit,
       totalQuizDuration,
-      questionDisplayTimes: [] // Will be populated as questions are displayed
+      questionDisplayTimes: []
     });
 
-    // Don't send correctIndex to frontend (security)
-    const questionsToSend = questionSets[setKey].map(
-      ({ correctIndex, ...rest }) => rest
-    );
+    const questionsToSend = questionSets[setKey].map(({ correctIndex, ...rest }) => rest);
 
     res.json({
       attemptId: attempt._id,
@@ -92,67 +70,118 @@ router.post("/start", async (req, res) => {
     });
   } catch (err) {
     console.error("Error in /start:", err);
-    // Handle duplicate key error (unique constraint on studentId)
-    if (err.code === 11000) {
-      return res.status(400).json({
-        message: "This Techzite ID has already attempted the quiz."
-      });
-    }
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// Resume quiz: Get quiz state and remaining time (for page refresh/reconnect)
-router.get("/resume/:attemptId", async (req, res) => {
+// ---- SUBMIT QUIZ ----
+router.post("/submit", async (req, res) => {
   try {
-    const { attemptId } = req.params;
+    const { attemptId, answers } = req.body;
 
     const attempt = await Attempt.findById(attemptId);
     if (!attempt) {
-      return res.status(404).json({ message: "Attempt not found." });
+      return res.status(404).json({ message: "Attempt not found" });
     }
 
-    if (attempt.status === "submitted") {
-      return res.status(400).json({ message: "Quiz has already been submitted." });
+    // Get question set used for this attempt
+    const questions = questionSets[attempt.questionSet];
+
+    if (!Array.isArray(answers) || answers.length !== questions.length) {
+      return res.status(400).json({ message: "Invalid answers payload" });
     }
 
-    // Calculate remaining time (use paused time if timer is paused)
-    const now = new Date();
-    let remainingTime;
-    let pausedQuestionTimeLeft = null;
-    let pausedTotalTimeLeft = null;
+    // Build responses securely
+    const responses = answers.map((chosenIndex, i) => {
+      const q = questions[i];
+      return {
+        question: q.question,
+        options: q.options,
+        chosenIndex,
+        correctIndex: q.correctIndex,
+        isCorrect: chosenIndex === q.correctIndex
+      };
+    });
 
-    if (attempt.timerPaused) {
-      // Use paused timer values
-      pausedTotalTimeLeft = attempt.pausedTotalTimeLeft || 0;
-      pausedQuestionTimeLeft = attempt.pausedQuestionTimeLeft || attempt.perQuestionTimeLimit;
-      remainingTime = pausedTotalTimeLeft;
-    } else {
-      // Calculate from quiz end time
-      remainingTime = attempt.quizEndTime 
-        ? Math.max(0, Math.floor((attempt.quizEndTime - now) / 1000))
-        : attempt.totalQuizDuration;
-    }
+    attempt.responses = responses;
+    attempt.score = responses.filter(r => r.isCorrect).length;
+    attempt.totalQuestions = responses.length;
+    attempt.status = "submitted";
+    attempt.endedAt = new Date();
 
-    // Get questions without correctIndex
-    const setKey = attempt.questionSet;
-    const questions = questionSets[setKey] || [];
-    const questionsToSend = questions.map(({ correctIndex, ...rest }) => rest);
+    await attempt.save();
+
+    res.json({
+      message: "Quiz submitted successfully",
+      score: attempt.score,
+      totalQuestions: attempt.totalQuestions
+    });
+
+  } catch (err) {
+    console.error("Error in /submit:", err);
+    res.status(500).json({ message: "Failed to submit quiz" });
+  }
+});
+
+
+// ---- FLAG CHEAT ----
+router.post("/flag-cheat", async (req, res) => {
+  try {
+    const { attemptId, questionTimeLeft, totalTimeLeft, currentQuestionIndex } = req.body;
+    const attempt = await Attempt.findById(attemptId);
+    if (!attempt) return res.status(404).json({ message: "Attempt not found" });
+
+    attempt.cheated = true;
+    attempt.questionDisplayTimes.push({
+      questionIndex: currentQuestionIndex,
+      displayedAt: new Date(),
+      timeLeft: questionTimeLeft
+    });
+
+    await attempt.save();
+    res.json({ message: "Cheat flagged" });
+  } catch (err) {
+    console.error("Error in /flag-cheat:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ---- UNLOCK QUIZ (ADMIN ONLY) ----
+router.post("/unlock", async (req, res) => {
+  try {
+    const { attemptId, adminCode } = req.body;
+    if (adminCode !== "CSEADMIN2025") return res.status(403).json({ message: "Invalid admin code" });
+
+    const attempt = await Attempt.findById(attemptId);
+    if (!attempt) return res.status(404).json({ message: "Attempt not found" });
+
+    attempt.cheated = false;
+    await attempt.save();
+
+    res.json({ message: "Quiz unlocked", pausedQuestionTimeLeft: 45 });
+  } catch (err) {
+    console.error("Error in /unlock:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ---- RESUME QUIZ ----
+router.get("/resume/:attemptId", async (req, res) => {
+  try {
+    const attempt = await Attempt.findById(req.params.attemptId);
+    if (!attempt) return res.status(404).json({ message: "Attempt not found" });
+
+    const questionsToSend = questionSets[attempt.questionSet].map(({ correctIndex, ...rest }) => rest);
 
     res.json({
       attemptId: attempt._id,
-      questionSet: setKey,
+      questionSet: attempt.questionSet,
       questions: questionsToSend,
-      quizStartTime: attempt.quizStartTime ? attempt.quizStartTime.toISOString() : null,
-      quizEndTime: attempt.quizEndTime ? attempt.quizEndTime.toISOString() : null,
+      quizStartTime: attempt.quizStartTime,
+      quizEndTime: attempt.quizEndTime,
       perQuestionTimeLimit: attempt.perQuestionTimeLimit,
       totalQuizDuration: attempt.totalQuizDuration,
-      remainingTime, // Remaining seconds
-      questionDisplayTimes: attempt.questionDisplayTimes || [],
-      timerPaused: attempt.timerPaused || false,
-      pausedQuestionTimeLeft,
-      pausedTotalTimeLeft,
-      currentQuestionIndex: attempt.currentQuestionIndex || 0
+      answers: attempt.responses || []
     });
   } catch (err) {
     console.error("Error in /resume:", err);
@@ -160,197 +189,19 @@ router.get("/resume/:attemptId", async (req, res) => {
   }
 });
 
-// Track question display time
+// ---- TRACK QUESTION ----
 router.post("/track-question", async (req, res) => {
   try {
     const { attemptId, questionIndex } = req.body;
-
-    if (typeof attemptId === "undefined" || typeof questionIndex !== "number") {
-      return res.status(400).json({ message: "attemptId and questionIndex are required." });
-    }
-
     const attempt = await Attempt.findById(attemptId);
-    if (!attempt) {
-      return res.status(404).json({ message: "Attempt not found." });
-    }
+    if (!attempt) return res.status(404).json({ message: "Attempt not found" });
 
-    // Initialize questionDisplayTimes array if needed
-    if (!attempt.questionDisplayTimes) {
-      attempt.questionDisplayTimes = [];
-    }
-
-    // Store display time for this question index
-    const displayTime = new Date();
-    attempt.questionDisplayTimes[questionIndex] = displayTime;
+    attempt.questionDisplayTimes.push({ questionIndex, displayedAt: new Date() });
     await attempt.save();
 
-    res.json({ ok: true, displayTime: displayTime.toISOString() });
+    res.json({ message: "Question tracked" });
   } catch (err) {
     console.error("Error in /track-question:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Submit quiz: compute score, store responses with question + answer + correctness
-router.post("/submit", async (req, res) => {
-  try {
-    const { attemptId, answers } = req.body;
-
-    if (!attemptId || !Array.isArray(answers)) {
-      return res
-        .status(400)
-        .json({ message: "attemptId and answers are required." });
-    }
-
-    const attempt = await Attempt.findById(attemptId);
-    if (!attempt) {
-      return res.status(404).json({ message: "Attempt not found." });
-    }
-
-    if (attempt.status === "submitted") {
-      return res.status(400).json({ message: "Quiz has already been submitted." });
-    }
-
-    // ⏱️ Validate timing on backend
-    const now = new Date();
-    if (now > attempt.quizEndTime) {
-      // Quiz time has expired, but allow submission (auto-submit scenario)
-      console.log(`Quiz ${attemptId} submitted after time limit`);
-    }
-
-    const setKey = attempt.questionSet;
-    // ⚠️ NOTE: questionSets is loaded from require() at server startup.
-    // If questions.js was updated, server must be restarted for changes to apply.
-    const questions = questionSets[setKey];
-
-    if (!questions || questions.length === 0) {
-      return res.status(500).json({ message: "Question set not found." });
-    }
-
-    let score = 0;
-    const responses = [];
-
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      const chosenIndex = answers[i]; // may be undefined/null if not answered
-      const correctIndex = q.correctIndex;
-
-      const isCorrect = chosenIndex === correctIndex;
-      if (isCorrect) score++;
-
-      responses.push({
-        question: q.question,
-        options: q.options,
-        chosenIndex:
-          typeof chosenIndex === "number" ? chosenIndex : -1, // -1 = not answered
-        correctIndex,
-        isCorrect
-      });
-    }
-
-    attempt.responses = responses;
-    attempt.score = score;
-    attempt.totalQuestions = questions.length;
-    attempt.status = "submitted";
-    attempt.endedAt = new Date();
-    await attempt.save();
-
-    res.json({ score, total: questions.length });
-  } catch (err) {
-    console.error("Error in /submit:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Flag cheat: mark attempt as cheated and pause timers
-router.post("/flag-cheat", async (req, res) => {
-  try {
-    const { attemptId, questionTimeLeft, totalTimeLeft, currentQuestionIndex } = req.body;
-
-    if (!attemptId) {
-      return res.status(400).json({ message: "attemptId is required." });
-    }
-
-    const attempt = await Attempt.findById(attemptId);
-    if (!attempt) {
-      return res.status(404).json({ message: "Attempt not found." });
-    }
-
-    if (attempt.status === "submitted") {
-      return res.status(400).json({ message: "Quiz has already been submitted." });
-    }
-
-    // Store timer state when cheat is detected
-    const now = new Date();
-    const updateData = {
-      cheated: true,
-      timerPaused: true,
-      timerPausedAt: now,
-      cheatDetectedAt: now,
-      pausedQuestionTimeLeft: typeof questionTimeLeft === "number" ? questionTimeLeft : attempt.perQuestionTimeLimit,
-      pausedTotalTimeLeft: typeof totalTimeLeft === "number" ? totalTimeLeft : (attempt.quizEndTime ? Math.max(0, Math.floor((attempt.quizEndTime - now) / 1000)) : attempt.totalQuizDuration),
-      pausedQuestionIndex: typeof currentQuestionIndex === "number" ? currentQuestionIndex : attempt.currentQuestionIndex,
-      currentQuestionIndex: typeof currentQuestionIndex === "number" ? currentQuestionIndex : attempt.currentQuestionIndex
-    };
-
-    await Attempt.findByIdAndUpdate(attemptId, updateData);
-    res.json({ ok: true, message: "Cheat flagged and timers paused." });
-  } catch (err) {
-    console.error("Error in /flag-cheat:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Unlock quiz: resume timers after admin unlock
-router.post("/unlock", async (req, res) => {
-  try {
-    const { attemptId, adminCode } = req.body;
-
-    if (!attemptId) {
-      return res.status(400).json({ message: "attemptId is required." });
-    }
-
-    // In production, validate adminCode against environment variable or database
-    // For now, we'll accept any unlock request (admin validation should be done client-side or via separate auth)
-    
-    const attempt = await Attempt.findById(attemptId);
-    if (!attempt) {
-      return res.status(404).json({ message: "Attempt not found." });
-    }
-
-    if (attempt.status === "submitted") {
-      return res.status(400).json({ message: "Quiz has already been submitted." });
-    }
-
-    if (!attempt.timerPaused) {
-      return res.status(400).json({ message: "Quiz is not paused." });
-    }
-
-    // Calculate new quiz end time based on paused total time
-    const now = new Date();
-    const remainingTotalTime = attempt.pausedTotalTimeLeft || 0;
-    const newQuizEndTime = new Date(now.getTime() + remainingTotalTime * 1000);
-
-    // Resume timers
-    const updateData = {
-      timerPaused: false,
-      unlockedAt: now,
-      quizEndTime: newQuizEndTime, // Extend end time to account for paused duration
-      currentQuestionIndex: attempt.pausedQuestionIndex !== undefined ? attempt.pausedQuestionIndex : attempt.currentQuestionIndex
-    };
-
-    await Attempt.findByIdAndUpdate(attemptId, updateData);
-
-    res.json({
-      ok: true,
-      message: "Quiz unlocked and timers resumed.",
-      pausedQuestionTimeLeft: attempt.pausedQuestionTimeLeft,
-      pausedTotalTimeLeft: remainingTotalTime,
-      newQuizEndTime: newQuizEndTime.toISOString(),
-      currentQuestionIndex: updateData.currentQuestionIndex
-    });
-  } catch (err) {
-    console.error("Error in /unlock:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

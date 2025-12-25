@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 
+/* 🔹 Individual Question Response */
 const responseSchema = new mongoose.Schema(
   {
     question: { type: String, required: true },
@@ -11,22 +12,34 @@ const responseSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const attemptSchema = new mongoose.Schema(
+
+/* 🔹 Student Schema */
+const studentSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    studentId: { type: String, required: true, unique: true }, // Techzite ID
+    studentId: { type: String, required: true },
     email: { type: String, required: true },
+    phoneNumber: { type: String, required: true }
+  },
+  { _id: false }
+);
 
-    questionSet: { type: String, required: true }, // A / B / C / D
-
-    // 🔹Each element contains question + options + chosen answer, etc.
+/* 🔹 Attempt Schema */
+const attemptSchema = new mongoose.Schema(
+  {
+    students: {
+      type: [studentSchema],
+      validate: {
+        validator: (arr) => arr.length === 3,
+        message: "Exactly 3 students must be present."
+      },
+      required: true
+    },
+    questionSet: { type: String, required: true },
     responses: [responseSchema],
-
     score: { type: Number, default: 0 },
     totalQuestions: { type: Number, default: 0 },
-
     cheated: { type: Boolean, default: false },
-
     status: {
       type: String,
       enum: ["in-progress", "submitted"],
@@ -34,23 +47,24 @@ const attemptSchema = new mongoose.Schema(
     },
     startedAt: { type: Date, default: Date.now },
     endedAt: { type: Date },
-
-    // ⏱️ Timing fields (server-defined to prevent manipulation)
-    quizStartTime: { type: Date }, // Server timestamp when quiz started
-    quizEndTime: { type: Date }, // Calculated: quizStartTime + totalQuizDuration
-    perQuestionTimeLimit: { type: Number, default: 45 }, // 45 seconds per question
-    totalQuizDuration: { type: Number, default: 900 }, // 15 minutes = 900 seconds
-    questionDisplayTimes: [{ type: Date }], // Timestamps when each question was displayed
-    currentQuestionIndex: { type: Number, default: 0 }, // Track current question for resume
-    
-    // ⏸️ Timer pause/resume state (for cheat detection)
-    timerPaused: { type: Boolean, default: false }, // Whether timers are currently paused
-    timerPausedAt: { type: Date }, // When timer was paused
-    pausedQuestionTimeLeft: { type: Number }, // Remaining time for current question when paused
-    pausedTotalTimeLeft: { type: Number }, // Remaining total time when paused
-    pausedQuestionIndex: { type: Number }, // Which question was active when paused
-    cheatDetectedAt: { type: Date }, // Timestamp when cheat was detected
-    unlockedAt: { type: Date } // Timestamp when admin unlocked the quiz
+    quizStartTime: { type: Date },
+    quizEndTime: { type: Date },
+    perQuestionTimeLimit: { type: Number, default: 45 },
+    totalQuizDuration: { type: Number, default: 900 },
+    questionDisplayTimes: [{ questionIndex: Number, displayedAt: Date, timeLeft: Number }],
+    currentQuestionIndex: { type: Number, default: 0 },
+    timerPaused: { type: Boolean, default: false },
+    timerPausedAt: { type: Date },
+    pausedQuestionTimeLeft: { type: Number },
+    pausedTotalTimeLeft: { type: Number },
+    pausedQuestionIndex: { type: Number },
+    cheatDetectedAt: { type: Date },
+    unlockedAt: { type: Date },
+    mode: {
+      type: String,
+      enum: ["online", "offline"],
+      default: "offline"
+    }
   },
   { timestamps: true }
 );
