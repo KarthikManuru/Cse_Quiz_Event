@@ -2,61 +2,60 @@ import React, { useState } from "react";
 import { startQuiz } from "../api";
 
 const StartForm = ({ onStarted }) => {
-  const [form, setForm] = useState({
-    name: "",
-    studentId: "",
-    email: ""
-  });
+  const [students, setStudents] = useState([
+    { name: "", studentId: "", email: "", phoneNumber: "" },
+    { name: "", studentId: "", email: "", phoneNumber: "" },
+    { name: "", studentId: "", email: "", phoneNumber: "" }
+  ]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleChange = (e) => {
-    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-  };
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  // Email validation
-  const isValidEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  const handleStudentChange = (index, field, value) => {
+    const updated = [...students];
+    updated[index][field] = value;
+    setStudents(updated);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    // Validation: All fields required
-    if (!form.name || !form.studentId || !form.email) {
-      setError("Please fill all fields.");
-      return;
-    }
+    // Validate students
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
 
-    // Validation: Trim and check empty strings
-    const trimmedName = form.name.trim();
-    const trimmedStudentId = form.studentId.trim();
-    const trimmedEmail = form.email.trim();
+      if (!s.name || !s.studentId || !s.email || !s.phoneNumber) {
+        setError(`Please fill all fields for Student ${i + 1}.`);
+        return;
+      }
 
-    if (!trimmedName || !trimmedStudentId || !trimmedEmail) {
-      setError("All fields must not be empty.");
-      return;
-    }
-
-    // Validation: Email format
-    if (!isValidEmail(trimmedEmail)) {
-      setError("Please enter a valid email address.");
-      return;
+      if (!isValidEmail(s.email.trim())) {
+        setError(`Invalid email for Student ${i + 1}.`);
+        return;
+      }
     }
 
     try {
       setLoading(true);
-      const data = await startQuiz({
-        name: trimmedName,
-        studentId: trimmedStudentId,
-        email: trimmedEmail
-      });
-      onStarted(data); // {attemptId, questionSet, questions, timing info}
+
+      const payload = {
+        students: students.map((s) => ({
+          name: s.name.trim(),
+          studentId: s.studentId.trim(),
+          email: s.email.trim(),
+          phoneNumber: s.phoneNumber.trim()
+        }))
+      };
+
+      const data = await startQuiz(payload);
+      onStarted(data);
+
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to start quiz. Please try again.");
+      setError(err.message || "Failed to start quiz.");
     } finally {
       setLoading(false);
     }
@@ -68,66 +67,81 @@ const StartForm = ({ onStarted }) => {
         <div>
           <div className="card-title">CSE Department Quiz</div>
           <div className="card-subtitle">
-            Enter your details to Start the Quiz.
+            Enter details of all 3 students
           </div>
         </div>
         <span className="badge">TECKZITE'25 2.0</span>
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="input-group">
-          <label>Name</label>
-          <input
-            name="name"
-            placeholder="Your full name"
-            value={form.name}
-            onChange={handleChange}
-          />
-        </div>
+        {/* Students */}
+        {students.map((student, index) => (
+          <div key={index} className="group-box">
+            <h4>Student {index + 1}</h4>
 
-        <div className="input-group">
-          <label>Teckzite ID</label>
-          <input
-            name="studentId"
-            placeholder="Your Teckzite ID"
-            value={form.studentId}
-            onChange={handleChange}
-            required
-          />
-        </div>
+            <div className="input-group">
+              <label>Name</label>
+              <input
+                placeholder="Full Name"
+                value={student.name}
+                onChange={(e) =>
+                  handleStudentChange(index, "name", e.target.value)
+                }
+              />
+            </div>
 
-        <div className="input-group">
-          <label>Email ID</label>
-          <input
-            name="email"
-            type="email"
-            placeholder="your.email@example.com"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
-        </div>
+            <div className="input-group">
+              <label>Teckzite ID</label>
+              <input
+                placeholder="RGUKTxxxx"
+                value={student.studentId}
+                onChange={(e) =>
+                  handleStudentChange(index, "studentId", e.target.value)
+                }
+              />
+            </div>
+
+            <div className="input-group">
+              <label>Email ID</label>
+              <input
+                type="email"
+                placeholder="email@example.com"
+                value={student.email}
+                onChange={(e) =>
+                  handleStudentChange(index, "email", e.target.value)
+                }
+              />
+            </div>
+
+            <div className="input-group">
+              <label>Phone Number</label>
+              <input
+                placeholder="10-digit mobile number"
+                value={student.phoneNumber}
+                onChange={(e) =>
+                  handleStudentChange(index, "phoneNumber", e.target.value)
+                }
+              />
+            </div>
+          </div>
+        ))}
 
         {error && <div className="error">{error}</div>}
 
         <button type="submit" disabled={loading}>
-          {loading ? "Starting..." : "Start Quiz"}
+          {loading ? "Starting Quiz..." : "Start Quiz"}
         </button>
 
-        <p className="text-muted" style={{ marginTop: 10 }}>
-  <strong>Instructions:</strong><br />
-  • Do not switch tabs.<br />
-  • Copy-paste actions (Ctrl+C / Ctrl+V) are not allowed.<br />
-  • Right-clicking is strictly prohibited.<br />
-  • Any prohibited action will be treated as cheating.<br />
-  • Each Teckzite ID is allowed only one attempt.<br />
-  • Total quiz duration is 15 minutes.<br />
-  • Each question has a fixed time limit of 45 seconds.<br />
-  • Questions will move automatically after the time expires.<br />
-  • Previous questions cannot be revisited.<br />
-  • The quiz will be submitted automatically once the total time ends.
-</p>
-
+        <p className="text-muted" style={{ marginTop: 12 }}>
+          <strong>Instructions:</strong><br />
+          • One group → one submission.<br />
+          • Do not switch tabs.<br />
+          • Copy-paste & right-click are prohibited.<br />
+          • Any violation will be treated as cheating.<br />
+          • Total quiz duration: 15 minutes.<br />
+          • Each question: 45 seconds.<br />
+          • Questions auto-submit on timeout.
+        </p>
       </form>
     </div>
   );

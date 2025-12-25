@@ -458,15 +458,15 @@ const Quiz = ({
         <div className="card-header" style={{ color: "#ffffff" }}>
           <div>
             <div className="card-title" style={{ color: "#ffffff" }}>
-              Quiz - Set {questionSet}
+              Quiz 
             </div>
             <div className="card-subtitle" style={{ color: "#ffffff" }}>
               Question {currentIndex + 1} of {questions.length}
             </div>
           </div>
           <div style={{ textAlign: "right", color: "#ffffff" }}>
-            <div className="badge">⏱ Time Left: {totalTimeText}</div>
-            <div className="badge" style={{ marginTop: 6 }}>
+            {/* <div className="badge">⏱ Time Left: {totalTimeText}</div> */}
+            <div className="badge" style={{ marginTop: 6, fontSize: "24px", fontWeight: "bold" }}>
               ⏱ Question: {questionTimeText}
             </div>
           </div>
