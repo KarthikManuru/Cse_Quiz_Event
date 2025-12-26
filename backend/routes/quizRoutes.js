@@ -20,6 +20,7 @@ router.post("/start", async (req, res) => {
   try {
     const { students } = req.body;
 
+    // Validate 3 students
     if (!Array.isArray(students) || students.length !== 3) {
       return res.status(400).json({ message: "Exactly 3 students are required." });
     }
@@ -35,6 +36,7 @@ router.post("/start", async (req, res) => {
       }
     }
 
+    // Prevent multiple attempts for same student
     const studentIds = students.map(s => s.studentId);
     const existingAttempt = await Attempt.findOne({ "students.studentId": { $in: studentIds } });
     if (existingAttempt) return res.status(400).json({ message: "One or more students already attempted quiz." });
@@ -57,6 +59,7 @@ router.post("/start", async (req, res) => {
       questionDisplayTimes: []
     });
 
+    // Send questions without revealing correct answers
     const questionsToSend = questionSets[setKey].map(({ correctIndex, ...rest }) => rest);
 
     res.json({
@@ -68,6 +71,7 @@ router.post("/start", async (req, res) => {
       perQuestionTimeLimit,
       totalQuizDuration
     });
+
   } catch (err) {
     console.error("Error in /start:", err);
     res.status(500).json({ message: "Server error" });
@@ -78,20 +82,15 @@ router.post("/start", async (req, res) => {
 router.post("/submit", async (req, res) => {
   try {
     const { attemptId, answers } = req.body;
-
     const attempt = await Attempt.findById(attemptId);
-    if (!attempt) {
-      return res.status(404).json({ message: "Attempt not found" });
-    }
+    if (!attempt) return res.status(404).json({ message: "Attempt not found" });
 
-    // Get question set used for this attempt
     const questions = questionSets[attempt.questionSet];
 
     if (!Array.isArray(answers) || answers.length !== questions.length) {
       return res.status(400).json({ message: "Invalid answers payload" });
     }
 
-    // Build responses securely
     const responses = answers.map((chosenIndex, i) => {
       const q = questions[i];
       return {
@@ -122,7 +121,6 @@ router.post("/submit", async (req, res) => {
     res.status(500).json({ message: "Failed to submit quiz" });
   }
 });
-
 
 // ---- FLAG CHEAT ----
 router.post("/flag-cheat", async (req, res) => {
